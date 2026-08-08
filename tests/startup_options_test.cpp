@@ -12,7 +12,7 @@ static_assert(std::is_const_v<std::remove_reference_t<decltype(island::kProducti
 static_assert(std::is_const_v<std::remove_reference_t<decltype(island::kSmokeTestInitialUrl)>>);
 
 TEST(StartupOptions, DefaultsToTheFixedProductionPage) {
-    constexpr std::array<std::string_view, 0> kArguments;
+    constexpr std::array<std::string_view, 0> kArguments{};
 
     const island::StartupOptions options = island::StartupOptions::Parse(kArguments);
 
