@@ -6,7 +6,7 @@
       "host": "cef-builds.spotifycdn.com",
       "archive": "tar.bz2",
       "sentinel": "cmake/cef_macros.cmake",
-      "limits": {"max_archive_bytes": 1200000000, "max_members": 50000, "max_member_bytes": 1200000000, "max_extract_bytes": 3000000000},
+      "limits": {"max_archive_bytes": 1200000000, "max_members": 50000, "max_member_bytes": 2000000000, "max_extract_bytes": 3000000000},
       "targets": {
         "macosx64": "0d10aae3285c1ee520351ab8d0d2f5cd3762575177fa2ff5048fbb0e589c2f82",
         "macosarm64": "57f58530234f5b2a24f02479fdbc92b50aa5f94f7a66e32251cb71571284fad1",
