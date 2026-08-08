@@ -200,24 +200,52 @@ def install_geist(root: Path, lock: LockFile, dry_run: bool) -> None:
         work = Path(temporary)
         archive = work / "download.tar.gz"
         download(lock.geist, archive, frozenset({"github.com", "codeload.github.com"}))
-        extracted = extract(archive, work / "extract", lock.geist)
-        if extracted.name != f"geist-font-{lock.geist_commit}":
-            raise InstallError("Geist archive root does not match the pinned commit")
         staged = work / "staged"
         staged.mkdir()
-        selected = {
-            filename: extracted / "fonts" / ("GeistMono" if filename.startswith("GeistMono-") else "Geist") / "ttf" / filename
+        expected_root = f"geist-font-{lock.geist_commit}"
+        expected_paths = {
+            f"{expected_root}/fonts/{'GeistMono' if filename.startswith('GeistMono-') else 'Geist'}/ttf/{filename}": filename
             for filename in lock.geist_files
         }
-        if not all(path.is_file() for path in selected.values()):
-            raise InstallError("Geist archive is missing required static TTF weights")
-        licenses = {filename: extracted / filename for filename in lock.geist_licenses}
-        if not all(path.is_file() for path in licenses.values()):
+        expected_paths.update({f"{expected_root}/{filename}": filename for filename in lock.geist_licenses})
+        found_roots: set[str] = set()
+        copied: set[str] = set()
+        mode = "r:gz"
+        try:
+            with tarfile.open(archive, mode) as bundle:
+                members_seen = 0
+                extracted_size = 0
+                for member in bundle:
+                    _safe_member(member)
+                    members_seen += 1
+                    if members_seen > lock.geist.max_members:
+                        raise InstallError("archive exceeds member count limit")
+                    if member.size > lock.geist.max_member_bytes:
+                        raise InstallError("archive member exceeds size limit")
+                    extracted_size += member.size
+                    if extracted_size > lock.geist.max_extract_bytes:
+                        raise InstallError("archive exceeds extracted size limit")
+                    found_roots.add(PurePosixPath(member.name).parts[0])
+                    output_name = expected_paths.get(member.name)
+                    if output_name is None:
+                        continue
+                    if not member.isfile():
+                        raise InstallError("Geist archive contains a non-file required entry")
+                    source = bundle.extractfile(member)
+                    if source is None:
+                        raise InstallError("Geist archive is missing required static files")
+                    with source, (staged / output_name).open("wb") as output:
+                        shutil.copyfileobj(source, output)
+                    copied.add(output_name)
+        except (OSError, tarfile.TarError) as error:
+            raise InstallError(f"archive extraction failed: {error}") from error
+        if found_roots != {expected_root}:
+            raise InstallError("Geist archive root does not match the pinned commit")
+        expected_outputs = set(lock.geist_files) | set(lock.geist_licenses)
+        if copied != expected_outputs:
+            if set(lock.geist_files) - copied:
+                raise InstallError("Geist archive is missing required static TTF weights")
             raise InstallError("Geist archive is missing required license files")
-        for filename in lock.geist_files:
-            shutil.copyfile(selected[filename], staged / filename)
-        for filename, license_path in licenses.items():
-            shutil.copyfile(license_path, staged / filename)
         _write_receipt(staged, Receipt("geist", "all", lock.digest, lock.geist.source, lock.geist.sha256, _tree_sha256(staged)))
         _replace(destination, staged)
 

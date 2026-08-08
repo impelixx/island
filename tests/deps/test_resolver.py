@@ -185,6 +185,40 @@ class ResolverTests(unittest.TestCase):
             install_geist(self.root, self.lock, False)
         verify(self.root, self.lock, "macosx64")
 
+    def test_geist_install_ignores_non_required_invalid_windows_paths(self) -> None:
+        fonts = self.root / "fonts.tar.gz"
+        geist_root = f"geist-font-{self.lock.geist_commit}"
+        make_archive(
+            fonts,
+            {
+                **{
+                    f"{geist_root}/fonts/{'GeistMono' if name.startswith('GeistMono-') else 'Geist'}/ttf/{name}": b"font"
+                    for name in self.lock.geist_files
+                },
+                **{f"{geist_root}/{name}": b"license" for name in self.lock.geist_licenses},
+                f"{geist_root}/sources/||": b"ignored",
+            },
+        )
+        original_extract = tarfile.TarFile.extract
+
+        def fail_windows_invalid_member(
+            archive: tarfile.TarFile, member: tarfile.TarInfo | str, path: str = "", set_attrs: bool = True, *, numeric_owner: bool = False
+        ):
+            target = member.name if isinstance(member, tarfile.TarInfo) else member
+            if str(target).endswith("/sources/||"):
+                raise OSError("[Errno 22] Invalid argument")
+            return original_extract(
+                archive, member, path=path, set_attrs=set_attrs, numeric_owner=numeric_owner
+            )
+
+        with patch("deps.install.download", copy_download(fonts)):
+            with patch("tarfile.TarFile.extract", side_effect=fail_windows_invalid_member):
+                install_geist(self.root, self.lock, False)
+        for filename in self.lock.geist_files:
+            self.assertTrue((self.root / "assets" / "fonts" / filename).is_file())
+        for filename in self.lock.geist_licenses:
+            self.assertTrue((self.root / "assets" / "fonts" / filename).is_file())
+
     def test_verify_rejects_receipt_mismatch(self) -> None:
         cef = self.root / "cef.tar.bz2"
         cef_root = f"cef_binary_{self.lock.cef_version}_{self.artifact.target}"
