@@ -49,7 +49,10 @@ jobs:
         run: |
           set -o pipefail
           mkdir -p ci-logs
-          cmake -S . -B build-search -DCMAKE_BUILD_TYPE=Release \
+          # Configure src/search as its own source root: the search kernel is
+          # CEF-free, and its standalone mode keeps cmake away from the root
+          # CEF/font/icon sentinels of the browser build.
+          cmake -S src/search -B build-search -DCMAKE_BUILD_TYPE=Release \
             -DISLAND_ENABLE_SEARCH=ON ${{ matrix.cmake_arguments }} \
             2>&1 | tee ci-logs/configure-${{ matrix.target }}.log
       - name: Build search targets
