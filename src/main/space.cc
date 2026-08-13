@@ -2,6 +2,8 @@
 
 #include <algorithm>
 
+#include "include/cef_request_context_handler.h"
+
 namespace island {
 
 Space::Space(SpaceId id, std::string name, SpaceColor color)
@@ -18,6 +20,8 @@ void Space::Rename(std::string name) { name_ = std::move(name); }
 void Space::SetColor(SpaceColor color) { color_ = color; }
 
 const std::vector<Tab>& Space::tabs() const noexcept { return tabs_; }
+
+std::vector<Tab>& Space::editable_tabs() noexcept { return tabs_; }
 
 std::size_t Space::tab_count() const noexcept { return tabs_.size(); }
 
@@ -143,6 +147,25 @@ bool Space::SetSplit(SplitPairing pairing) {
 }
 
 void Space::ClearSplit() { split_.reset(); }
+
+void Space::CreateRequestContextIfNeeded(const std::string& cache_path) {
+    if (request_context_) {
+        return;
+    }
+    CefRequestContextSettings settings;
+    if (!cache_path.empty()) {
+        CefString(&settings.cache_path) = cache_path;
+    }
+    // Always create a fresh per-space context. Using the global CEF request
+    // context (via CreateContext(GetGlobalContext(), ...)) segfaults when CEF
+    // is not yet initialized (e.g. in tests) because it dereferences a null
+    // global context reference.
+    request_context_ = CefRequestContext::CreateContext(settings, nullptr);
+}
+
+CefRefPtr<CefRequestContext> Space::request_context() const noexcept {
+    return request_context_;
+}
 
 void Space::MaintainActiveIndexAfterRemoval(std::size_t removed_index) {
     if (tabs_.empty()) {
